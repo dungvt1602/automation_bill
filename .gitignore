@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.db
+venv/
+.venv/
+output/
+*.xlsx
+!sample_output/*.xlsx

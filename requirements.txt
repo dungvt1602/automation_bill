@@ -1,0 +1,24 @@
+# AGO Fruit - Trade Document Automation PoC
+# Core
+google-generativeai>=0.8.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# PDF Processing
+PyMuPDF>=1.24.0        # Pure Python PDF→image, no Poppler needed
+Pillow>=10.0.0
+
+# Excel Export
+openpyxl>=3.1.0
+
+# Web UI
+streamlit>=1.38.0
+
+# Database
+# SQLite is built into Python — no extra package needed
+
+# Sample PDF Generation
+reportlab>=4.0.0
+
+# Utilities
+tenacity>=8.0.0        # Retry logic with exponential backoff
