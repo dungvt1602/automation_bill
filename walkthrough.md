@@ -1,19 +1,46 @@
-# Design Walkthrough
+# Phân Tích Thiết Kế Hệ Thống 🏗️
 
-## Key Design Decisions
+## 1. Các quyết định thiết kế then chốt
 
-The most important decision was **skipping traditional OCR entirely**. Instead of chaining Tesseract → regex parsing → template matching (which breaks on every new supplier layout), I send page images directly to Gemini 2.5 Flash and let the vision model extract structured data in one pass. This makes the system layout-agnostic — it handles inconsistent formats by understanding documents visually, the same way a human operator would.
+Quyết định quan trọng nhất là **bỏ qua hoàn toàn OCR truyền thống**. Thay vì dùng chuỗi Tesseract → regex parsing → template matching, tôi gửi trực tiếp ảnh trang giấy tới **Gemini 2.5 Flash**. Điều này giúp hệ thống **không phụ thuộc vào layout** — nó hiểu chứng từ bằng thị giác giống như cách con người nhìn vào tờ giấy.
 
-I chose **Gemini 2.5 Flash** over GPT-4o mini primarily for its native multimodal input and structured JSON output mode. At $0.003 per document (~75 VND), the monthly cost stays under 165,000 VND even at 2× peak volume — well within the 5M VND budget. The cost headroom means we can afford retries, model upgrades, or scaling without concern.
+### Sơ đồ quy trình (Pipeline Workflow)
+```mermaid
+graph TD
+    A[Upload PDF] --> B[PyMuPDF - Render 400 DPI]
+    B --> C{AI Phân loại loại chứng từ}
+    C -->|Invoice| D[Trích xuất theo Schema Invoice]
+    C -->|Packing List| E[Trích xuất theo Schema PL]
+    C -->|Khác| F[Trích xuất theo Schema tương ứng]
+    D & E & F --> G[Engine Xác thực & Chấm điểm tin cậy]
+    G --> H{Độ tin cậy > 90%?}
+    H -->|Có| I[Tự động lưu & Sẵn sàng xuất Excel]
+    H -->|Không| J[Giao diện Review - Nhân viên kiểm tra]
+    J --> K[Lưu Audit Log & Cập nhật DB]
+```
 
-The **confidence scoring + human review loop** is the other critical choice. Rather than trusting the LLM blindly, every field carries a confidence score. Documents below threshold route to a Streamlit review UI where staff can verify and correct before export. This keeps humans in the loop without making them process every document.
+## 2. Lựa chọn Mô hình AI: Gemini 2.5 Flash
+Tôi chọn **Gemini 2.5 Flash** vì đây là mô hình có hiệu năng trên giá thành (P/P) tốt nhất hiện nay, hỗ trợ xuất JSON native cực kỳ ổn định.
 
-## What I'd Do Differently With More Time
+### Bảng so sánh chi phí (Dự kiến 3,000 chứng từ/tháng)
+*Chi tiết bảng giá xem tại: [Google AI Pricing](https://ai.google.dev/pricing)*
 
-I'd add a **feedback learning loop**: when a reviewer corrects a field, store the correction as a few-shot example for that supplier's document type. Over time, the system's effective accuracy improves per-supplier without any model fine-tuning — just better prompts.
+| Thông số | Gemini 2.5 Flash | Ngân sách cho phép |
+|---|---|---|
+| Giá Input (1M tokens) | $0.30 (~7,500đ) | - |
+| Giá Output (1M tokens) | $2.50 (~62,500đ) | - |
+| **Chi phí TB / 1 chứng từ** | **~100đ - 250đ** | **1,600đ** |
+| **Tổng chi phí / tháng** | **~600,000đ** | **5,000,000đ** |
+| **Hiệu quả tiết kiệm** | **~88% ngân sách** | - |
 
-I'd also build **supplier-specific validation rules** (e.g., "Supplier X always ships in 20ft containers") to catch anomalies that cross-field validation alone would miss.
+> **Ghi chú:** Chi phí 100đ - 250đ cho mỗi file đã bao gồm việc đọc hiểu ảnh, trích xuất dữ liệu và sẵn sàng xuất ra file Excel. Đây là mức giá cực kỳ tối ưu so với việc thuê nhân sự nhập liệu thủ công.
 
-## One Assumption I'm Uncertain About
+## 3. Vòng lặp Kiểm soát viên (Human-in-the-loop)
+Đây là yếu tố sống còn của hệ thống. Không bao giờ tin tưởng hoàn toàn vào AI. Mọi trường dữ liệu đều có điểm tin cậy. Nếu điểm thấp, chứng từ sẽ được đẩy về giao diện Streamlit để nhân viên duyệt lại. 
 
-I'm assuming **3 pages per document on average** for cost projections. Real-world Packing Lists for mixed fruit shipments could be 8–10 pages with dense item tables. This wouldn't break the budget (even at 10 pages, cost would be ~$0.01/doc ≈ 250 VND), but it would increase processing latency. I'd want to validate this assumption against actual AGO Fruit document samples before production deployment.
+## 4. Những cải tiến trong tương lai
+- **Học máy liên tục:** Lưu các bản sửa lỗi của nhân viên để làm mẫu cho AI học tập.
+- **Quy tắc kiểm tra chéo:** Đối chiếu dữ liệu giữa Invoice, Packing List và BL để phát hiện sai lệch tự động.
+
+## 5. Giả định về khối lượng
+Dự toán chi phí dựa trên mức trung bình 3 trang/chứng từ. Với Gemini 2.5 Flash, ngay cả khi Packing List dài 20 trang, chi phí vẫn nằm trong tầm kiểm soát tuyệt đối.
